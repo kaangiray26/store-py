@@ -7,9 +7,13 @@ import httpx
 import argparse
 from tqdm import tqdm
 from tqdm.utils import CallbackIOWrapper
+from prettytable import PrettyTable
 
 class Store:
-    def __init__(self):        
+    def __init__(self):
+        self.pretty = False
+        self.x = PrettyTable()
+        self.x.align = "l"
         with open(os.path.join(os.path.expanduser('~'),'.config/store-py/config.json')) as f:
             self.config = json.load(f)
     
@@ -25,6 +29,9 @@ class Store:
         # Check for password
         if not self.config["password"]:
             raise Exception("Password not specified!")
+        
+        if args.pretty:
+            self.pretty = True
         
         if args.get:
             self.get_file(args.get)
@@ -93,9 +100,16 @@ class Store:
             print("No owned files!")
             return
         
-        print("Files:")
-        for object in r.json()['response']:
-            print(object)
+        # Print response
+        if not self.pretty:
+            for object in r.json()['response']:
+                print(object)
+            return
+        
+        # Pretty print
+        self.x.field_names = ["title", "id", "date", "owner"]
+        self.x.add_rows([[object['title'], object['id'], object['date'], object['owner']] for object in data['response']])
+        print(self.x)
         
     def delete_file(self, filename):
         # Delete file from server
@@ -138,7 +152,14 @@ class Store:
                     raise Exception("Error adding file!")
                 
                 # Print response
-                print(r.json())
+                if not self.pretty:
+                    print(r.json())
+                    return
+                
+                # Pretty print
+                self.x.field_names = ["file"]
+                self.x.add_row([r.json()['file']])
+                print(self.x)
                 
     def search_file(self, query):
         server = f"{self.config['server']}/search"
@@ -149,7 +170,17 @@ class Store:
         if r.status_code != 200:
             raise Exception("Error replacing file!")
         
-        print(r.json())
+        data = r.json()
+        
+        # Print results
+        if not self.pretty:
+            print(data)
+            return
+        
+        # Pretty print
+        self.x.field_names = ["title", "id", "date", "owner"]
+        self.x.add_rows([[object['title'], object['id'], object['date'], object['owner']] for object in data['response']])
+        print(self.x)
 
 if __name__ == "__main__":
     s = Store()
@@ -160,6 +191,7 @@ if __name__ == "__main__":
     parser.add_argument('-r', '--replace', help='Replace file in the store', nargs=2, metavar=('file_id', 'file_path'))
     parser.add_argument('-g', '--get', help='Get file from the store', metavar='file_id')
     parser.add_argument('-s', '--search', help='Search file from the store', metavar='query')
+    parser.add_argument('-p', '--pretty', help='Pretty print json response', action='store_true')
     
     args = parser.parse_args()
     s.handle_args(args)
